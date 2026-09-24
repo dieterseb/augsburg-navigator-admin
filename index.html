@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Augsburg Navigator Admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,400..600,50&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  /* Gleiche Farbwelt wie die App (ui/theme/Color.kt) */
+  :root {
+    color-scheme: light;
+    --bg: #F7F1E8;
+    --surface: #FFFBF5;
+    --variant: #EFE6D8;
+    --ink: #2B2420;
+    --muted: #6E6159;
+    --line: #E2D6C6;
+    --line-strong: #CDBEAB;
+    --accent: #B5553A;
+    --accent-ink: #FFFBF5;
+    --accent-soft: #F6DCCF;
+    --accent-soft-ink: #4A1D0F;
+    --danger: #A2382B;
+    --ok: #4F6B3F;
+    --radius-l: 22px;
+    --radius-m: 14px;
+    --serif: "Fraunces", Georgia, "Times New Roman", serif;
+    --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #1E1A17;
+      --surface: #28221E;
+      --variant: #352D28;
+      --ink: #EFE6DC;
+      --muted: #BFB1A5;
+      --line: #3F3631;
+      --line-strong: #5A4E47;
+      --accent: #E38D70;
+      --accent-ink: #3D160A;
+      --accent-soft: #5E2B1B;
+      --accent-soft-ink: #FFDBCE;
+      --danger: #F08A7C;
+      --ok: #B4C3A3;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 var(--sans);
+    padding-inline: max(16px, env(safe-area-inset-left));
+    padding-block: 0 48px;
+  }
+  h1, h2 { font-family: var(--serif); font-weight: 500; margin: 0; text-wrap: balance; }
+  button, input, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; }
+
+  /* Kopfzeile */
+  .top {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding-block: calc(20px + env(safe-area-inset-top, 0px)) 20px;
+  }
+  .brand { display: flex; flex-direction: column; gap: 2px; }
+  .eyebrow {
+    font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent);
+  }
+  .brand h1 { font-size: 26px; line-height: 1.1; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    border: 1px solid var(--line); background: var(--surface);
+    border-radius: 999px; padding: 9px 16px; font-weight: 600; font-size: 14px;
+    cursor: pointer; transition: transform .12s ease, background .15s ease;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn.danger { color: var(--danger); }
+  .btn.danger.solid { background: var(--danger); border-color: var(--danger); color: var(--surface); }
+  .btn:disabled { opacity: .55; cursor: default; transform: none; }
+
+  /* Login */
+  .login {
+    max-width: 380px; margin: 12vh auto 0; background: var(--surface);
+    border: 1px solid var(--line); border-radius: var(--radius-l); padding: 28px;
+    display: grid; gap: 16px;
+  }
+  .login h1 { font-size: 30px; }
+  .login p { margin: 0; color: var(--muted); }
+
+  /* Formularfelder */
+  label.field { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .input, textarea {
+    width: 100%; background: var(--bg); border: 1px solid var(--line);
+    border-radius: var(--radius-m); padding: 11px 14px; font-weight: 400; font-size: 15px;
+  }
+  textarea { min-height: 120px; resize: vertical; line-height: 1.5; }
+  .input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  .hint { font-size: 12px; font-weight: 400; color: var(--muted); }
+  .error { color: var(--danger); font-size: 14px; margin: 0; }
+
+  /* Hauptbereich */
+  .layout { display: grid; gap: 20px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) {
+    .layout { grid-template-columns: 340px 1fr; align-items: start; }
+    .list-panel { position: sticky; top: 16px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
+  }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-l); }
+
+  .list-panel { padding: 16px; gap: 12px; display: flex; flex-direction: column; }
+  .list-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .list-head h2 { font-size: 20px; }
+  .count { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .filter { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
+    padding: 5px 11px; font-size: 13px; font-weight: 500; cursor: pointer;
+  }
+  .chip .n { color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 4px; font-weight: 400; }
+  .chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--accent-soft-ink); }
+  .chip[aria-pressed="true"] .n { color: inherit; opacity: .75; }
+  .no-results { color: var(--muted); font-size: 14px; padding: 8px; margin: 0; }
+  .places { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; overflow: auto; }
+  .place {
+    display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+    background: transparent; border: 1px solid transparent; border-radius: var(--radius-m);
+    padding: 8px; cursor: pointer;
+  }
+  .place:hover { background: var(--bg); }
+  .place[aria-current="true"] { background: var(--accent-soft); color: var(--accent-soft-ink); }
+  .thumb {
+    width: 44px; height: 44px; flex: none; border-radius: 12px; background: var(--variant);
+    object-fit: cover; display: grid; place-items: center; color: var(--muted); font-size: 18px;
+  }
+  .place-text { min-width: 0; display: grid; }
+  .place-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .place-meta { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .place[aria-current="true"] .place-meta { color: inherit; opacity: .8; }
+  .pill {
+    display: inline-block; font-size: 11px; font-weight: 600; border-radius: 999px;
+    padding: 1px 8px; background: var(--variant); color: var(--muted); margin-left: 6px;
+  }
+
+  /* Editor */
+  .editor { padding: 22px; display: grid; gap: 20px; }
+  .editor-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .editor-head h2 { font-size: 26px; }
+  .id-label { font-size: 12px; color: var(--muted); font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+  .section { display: grid; gap: 10px; }
+  .section-title { font-size: 13px; font-weight: 600; color: var(--muted); }
+
+  #map {
+    height: 300px; border-radius: var(--radius-m); border: 1px solid var(--line);
+    z-index: 0; max-width: 100%;
+  }
+  .coords { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end; }
+  @media (max-width: 520px) { .coords { grid-template-columns: 1fr 1fr; } .coords .btn { grid-column: 1 / -1; } }
+  .coords .input { font-variant-numeric: tabular-nums; }
+
+  .cats { display: flex; flex-wrap: wrap; gap: 8px; }
+  .cat input { position: absolute; opacity: 0; pointer-events: none; }
+  .cat span {
+    display: inline-block; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--surface); font-size: 14px; font-weight: 500; cursor: pointer; user-select: none;
+  }
+  .cat input:checked + span { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--accent-soft-ink); }
+  .cat input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .photos { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .photo-item {
+    display: grid; grid-template-columns: 112px 1fr auto; gap: 12px; align-items: center;
+    padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--bg);
+  }
+  @media (max-width: 520px) {
+    .photo-item { grid-template-columns: 88px 1fr; }
+    .photo-tools { grid-column: 1 / -1; justify-content: flex-end; }
+  }
+  .photo-item img {
+    width: 100%; max-width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; display: block;
+  }
+  .photo-fields { display: grid; gap: 6px; min-width: 0; }
+  .photo-fields .pill { justify-self: start; margin: 0; background: var(--accent-soft); color: var(--accent-soft-ink); }
+  .photo-fields .input { padding: 8px 12px; font-size: 14px; }
+  .photo-tools { display: flex; gap: 6px; }
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line);
+    background: var(--surface); cursor: pointer; font-size: 16px; line-height: 1;
+  }
+  .icon-btn:disabled { opacity: .35; cursor: default; }
+  .icon-btn.danger { color: var(--danger); }
+  .photos-empty { color: var(--muted); font-size: 14px; margin: 0; }
+  .photo-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .file-btn input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+
+  .switch { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 500; }
+  .switch input { width: 20px; height: 20px; accent-color: var(--accent); }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; padding-top: 4px; border-top: 1px solid var(--line); padding-block: 16px 0; }
+  .actions-right { display: flex; gap: 10px; flex-wrap: wrap; }
+  .confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 14px; }
+
+  .empty { padding: 48px 22px; text-align: center; color: var(--muted); display: grid; gap: 12px; justify-items: center; }
+  .empty h2 { color: var(--ink); font-size: 24px; }
+
+  /* Meldungen */
+  .toast {
+    position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+    background: var(--ink); color: var(--bg); padding: 12px 18px; border-radius: 999px;
+    font-weight: 500; font-size: 14px; transition: opacity .2s ease, transform .2s ease;
+    max-width: calc(100% - 32px);
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast.bad { background: var(--danger); color: var(--surface); }
+
+  /* Kartenmarker in Terrakotta */
+  .pin {
+    width: 26px; height: 26px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+    background: var(--accent); border: 3px solid var(--surface);
+    box-shadow: 0 3px 8px rgba(0,0,0,.3);
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Anmeldung -->
+  <form id="login" class="login" hidden>
+    <div class="eyebrow">Augsburg Navigator</div>
+    <h1>Orte verwalten</h1>
+    <p>Melde dich mit deinem Admin-Zugang an.</p>
+    <label class="field">E-Mail
+      <input id="login-email" class="input" type="email" autocomplete="username" required>
+    </label>
+    <label class="field">Passwort
+      <input id="login-password" class="input" type="password" autocomplete="current-password" required>
+    </label>
+    <p id="login-error" class="error" hidden></p>
+    <button id="login-submit" class="btn primary" type="submit">Anmelden</button>
+  </form>
+
+  <!-- Verwaltung -->
+  <div id="app" hidden>
+    <header class="top">
+      <div class="brand">
+        <div class="eyebrow">Augsburg Navigator</div>
+        <h1>Orte verwalten</h1>
+      </div>
+      <button id="logout" class="btn" type="button">Abmelden</button>
+    </header>
+
+    <div class="layout">
+      <aside class="panel list-panel">
+        <div class="list-head">
+          <h2>Orte <span id="count" class="count"></span></h2>
+          <button id="new-place" class="btn primary" type="button">+ Neuer Ort</button>
+        </div>
+        <input id="search" class="input" type="search" placeholder="Suchen …" aria-label="Orte durchsuchen">
+        <div id="cat-filter" class="filter" role="group" aria-label="Nach Kategorie filtern"></div>
+        <ul id="places" class="places"></ul>
+      </aside>
+
+      <main id="editor-panel" class="panel">
+        <div id="empty" class="empty">
+          <h2>Wähle einen Ort</h2>
+          <p>… oder lege mit „+ Neuer Ort“ einen neuen an.</p>
+        </div>
+
+        <form id="editor" class="editor" hidden novalidate>
+          <div class="editor-head">
+            <h2 id="editor-title">Neuer Ort</h2>
+            <span id="editor-id" class="id-label"></span>
+          </div>
+
+          <label class="field">Name
+            <input id="f-name" class="input" type="text" maxlength="120" required placeholder="z. B. Perlachturm">
+          </label>
+
+          <div class="section">
+            <div class="section-title">Standort – tippe auf die Karte oder ziehe den Marker</div>
+            <div id="map"></div>
+            <div class="coords">
+              <label class="field">Breitengrad
+                <input id="f-lat" class="input" type="text" inputmode="decimal" placeholder="48.36876">
+              </label>
+              <label class="field">Längengrad
+                <input id="f-lon" class="input" type="text" inputmode="decimal" placeholder="10.89842">
+              </label>
+              <button id="my-location" class="btn" type="button">Mein Standort</button>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Kategorien</div>
+            <div id="f-cats" class="cats"></div>
+          </div>
+
+          <label class="field">Beschreibung
+            <textarea id="f-desc" maxlength="6000" placeholder="Kurz: 2–4 Sätze. Ausführlich: Absätze durch eine Leerzeile trennen, Zwischenüberschriften mit ## am Zeilenanfang, z. B. „## Geschichte“."></textarea>
+            <span id="desc-count" class="hint"></span>
+          </label>
+
+          <div class="section">
+            <div class="section-title">Fotos – das erste ist das Titelfoto</div>
+            <ul id="photos" class="photos"></ul>
+            <div class="photo-actions">
+              <label class="btn file-btn">
+                <input id="f-photo" type="file" accept="image/*" multiple>
+                + Fotos hinzufügen
+              </label>
+              <span class="hint">Werden automatisch verkleinert (max. 1600 px) und beim Speichern hochgeladen.</span>
+            </div>
+          </div>
+
+          <label class="switch">
+            <input id="f-published" type="checkbox" checked>
+            In der App sichtbar
+          </label>
+
+          <p id="editor-error" class="error" hidden></p>
+
+          <div class="actions">
+            <div id="delete-area">
+              <button id="delete" class="btn danger" type="button">Löschen</button>
+              <div id="delete-confirm" class="confirm" hidden>
+                <span>Wirklich löschen?</span>
+                <button id="delete-yes" class="btn danger solid" type="button">Ja, löschen</button>
+                <button id="delete-no" class="btn" type="button">Abbrechen</button>
+              </div>
+            </div>
+            <div class="actions-right">
+              <button id="save" class="btn primary" type="submit">Speichern</button>
+            </div>
+          </div>
+        </form>
+      </main>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+// ---------------------------------------------------------------------
+// Einstellungen – öffentliche Werte aus Supabase (Project Settings → API)
+// ---------------------------------------------------------------------
+const SUPABASE_URL = "https://wrmqzapdxmpdulwbnizr.supabase.co";
+const SUPABASE_KEY = "sb_publishable_FwdJRiikk2Kla8TN5aZ5lg_QsSbEno2";
+
+// Gleiche IDs wie in der App (data/Category.kt)
+const CATEGORIES = [
+  ["sights", "Sehenswürdigkeiten"],
+  ["nature", "Natur & Freizeit"],
+  ["restaurants", "Restaurants"],
+  ["bars", "Bars & Biergärten"],
+  ["swimming", "Schwimmbäder & Baden"],
+  ["unesco", "UNESCO-Welterbe"],
+];
+const AUGSBURG = [48.3705, 10.8978];
+const PLACE_SELECT = "*, place_photos(id, path, caption, sort_order)";
+const PHOTO_MAX_PX = 1600;
+
+const CONFIGURED = !SUPABASE_URL.startsWith("HIER_");
+const sb = CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+const $ = (id) => document.getElementById(id);
+
+let places = [];
+let current = null;          // bearbeiteter Ort (null = neu)
+// Fotos im Editor: { id, path, caption, blob?, url }. Neue Fotos haben einen blob und noch keinen path.
+let photos = [];
+let removedPhotos = [];      // beim Speichern zu löschende, bereits hochgeladene Fotos
+let map, marker;
+
+// ---------- Hilfsfunktionen ----------
+
+function toast(message, bad = false) {
+  const el = $("toast");
+  el.textContent = message;
+  el.classList.toggle("bad", bad);
+  el.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => el.classList.remove("show"), 2800);
+}
+
+function showError(id, message) {
+  const el = $(id);
+  el.textContent = message || "";
+  el.hidden = !message;
+}
+
+function photoUrl(path) {
+  return path ? sb.storage.from("photos").getPublicUrl(path).data.publicUrl : null;
+}
+
+function newUuid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+/** Fotos eines Ortes in der richtigen Reihenfolge. */
+function sortedPhotos(place) {
+  return [...(place?.place_photos ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+}
+
+function slugify(name) {
+  return name.toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "ort";
+}
+
+function uniqueId(name) {
+  const base = slugify(name);
+  let id = base, n = 2;
+  while (places.some((p) => p.id === id)) id = `${base}-${n++}`;
+  return id;
+}
+
+function parseCoord(value) {
+  const n = Number(String(value).trim().replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Verkleinert ein Foto im Browser auf max. PHOTO_MAX_PX und macht ein JPEG daraus. */
+async function shrinkPhoto(file) {
+  let source;
+  try {
+    source = await createImageBitmap(file, { imageOrientation: "from-image" });
+  } catch {
+    source = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Das Bild konnte nicht gelesen werden."));
+      img.src = URL.createObjectURL(file);
+    });
+  }
+  const scale = Math.min(1, PHOTO_MAX_PX / Math.max(source.width, source.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(source.width * scale);
+  canvas.height = Math.round(source.height * scale);
+  canvas.getContext("2d").drawImage(source, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+}
+
+// ---------- Anmeldung ----------
+
+async function showForSession(session) {
+  if (!session) {
+    $("app").hidden = true;
+    $("login").hidden = false;
+    return;
+  }
+  const { data: admin } = await sb.from("admins").select("user_id").eq("user_id", session.user.id).maybeSingle();
+  if (!admin) {
+    await sb.auth.signOut();
+    showError("login-error", "Dieses Konto hat keine Admin-Rechte. Führe make-admin.sql für diese E-Mail aus.");
+    return;
+  }
+  $("login").hidden = true;
+  $("app").hidden = false;
+  await loadPlaces();
+}
+
+$("login").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  showError("login-error", "");
+  $("login-submit").disabled = true;
+  const { data, error } = await sb.auth.signInWithPassword({
+    email: $("login-email").value.trim(),
+    password: $("login-password").value,
+  });
+  $("login-submit").disabled = false;
+  if (error) {
+    showError("login-error", "Anmeldung fehlgeschlagen. Prüfe E-Mail und Passwort.");
+    return;
+  }
+  $("login-password").value = "";
+  await showForSession(data.session);
+});
+
+$("logout").addEventListener("click", async () => {
+  await sb.auth.signOut();
+  current = null;
+  showForSession(null);
+});
+
+// ---------- Liste ----------
+
+async function loadPlaces() {
+  const { data, error } = await sb.from("places").select(PLACE_SELECT).order("name");
+  if (error) {
+    toast("Orte konnten nicht geladen werden: " + error.message, true);
+    return;
+  }
+  places = data;
+  renderList();
+}
+
+let categoryFilter = null; // null = alle Kategorien
+
+function renderFilter() {
+  const chip = (id, label, count) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.setAttribute("aria-pressed", String(categoryFilter === id));
+    b.textContent = label;
+    const n = document.createElement("span");
+    n.className = "n";
+    n.textContent = count;
+    b.append(n);
+    b.addEventListener("click", () => { categoryFilter = id; renderList(); });
+    return b;
+  };
+  $("cat-filter").replaceChildren(
+    chip(null, "Alle", places.length),
+    ...CATEGORIES.map(([id, label]) => chip(id, label, places.filter((p) => p.categories.includes(id)).length)),
+  );
+}
+
+function renderList() {
+  renderFilter();
+  const q = $("search").value.trim().toLowerCase();
+  const shown = places.filter((p) =>
+    p.name.toLowerCase().includes(q) && (!categoryFilter || p.categories.includes(categoryFilter)));
+  $("count").textContent = `(${places.length})`;
+  const list = $("places");
+  if (!shown.length) {
+    const empty = document.createElement("p");
+    empty.className = "no-results";
+    empty.textContent = "Keine Orte gefunden.";
+    list.replaceChildren(empty);
+    return;
+  }
+  list.replaceChildren(...shown.map((p) => {
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "place";
+    btn.setAttribute("aria-current", String(current?.id === p.id));
+    btn.addEventListener("click", () => openEditor(p));
+
+    const url = photoUrl(sortedPhotos(p)[0]?.path);
+    const thumb = document.createElement(url ? "img" : "div");
+    thumb.className = "thumb";
+    if (url) { thumb.src = url; thumb.alt = ""; thumb.loading = "lazy"; } else { thumb.textContent = "·"; }
+
+    const text = document.createElement("div");
+    text.className = "place-text";
+    const name = document.createElement("span");
+    name.className = "place-name";
+    name.textContent = p.name;
+    if (!p.published) {
+      const pill = document.createElement("span");
+      pill.className = "pill";
+      pill.textContent = "Entwurf";
+      name.append(pill);
+    }
+    const meta = document.createElement("span");
+    meta.className = "place-meta";
+    meta.textContent = p.categories.map((id) => CATEGORIES.find(([c]) => c === id)?.[1] ?? id).join(" · ") || "Keine Kategorie";
+    text.append(name, meta);
+
+    btn.append(thumb, text);
+    li.append(btn);
+    return li;
+  }));
+}
+
+$("search").addEventListener("input", renderList);
+$("new-place").addEventListener("click", () => openEditor(null));
+
+// ---------- Editor ----------
+
+function buildCategoryChips() {
+  $("f-cats").replaceChildren(...CATEGORIES.map(([id, label]) => {
+    const wrap = document.createElement("label");
+    wrap.className = "cat";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.value = id;
+    input.id = `cat-${id}`;
+    const span = document.createElement("span");
+    span.textContent = label;
+    wrap.append(input, span);
+    return wrap;
+  }));
+}
+
+function ensureMap() {
+  if (map) return;
+  map = L.map("map").setView(AUGSBURG, 13);
+  // CARTO-Kacheln (OpenStreetMap-Daten): erlaubt auch Aufrufe direkt aus einer lokalen Datei,
+  // was die Server von openstreetmap.org nicht tun. Im Dunkelmodus eine dunkle Karte.
+  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark ? "dark_all" : "rastertiles/voyager"}/{z}/{x}/{y}{r}.png`, {
+    maxZoom: 20,
+    subdomains: "abcd",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  }).addTo(map);
+  const icon = L.divIcon({ className: "", html: '<div class="pin"></div>', iconSize: [26, 26], iconAnchor: [13, 30] });
+  marker = L.marker(AUGSBURG, { draggable: true, icon });
+  marker.on("dragend", () => setCoords(marker.getLatLng().lat, marker.getLatLng().lng, false));
+  map.on("click", (e) => setCoords(e.latlng.lat, e.latlng.lng, false));
+}
+
+function setCoords(lat, lon, pan = true) {
+  $("f-lat").value = lat.toFixed(7);
+  $("f-lon").value = lon.toFixed(7);
+  marker.setLatLng([lat, lon]).addTo(map);
+  if (pan) map.setView([lat, lon], Math.max(map.getZoom(), 16));
+}
+
+function onCoordInput() {
+  const lat = parseCoord($("f-lat").value);
+  const lon = parseCoord($("f-lon").value);
+  if (lat !== null && lon !== null) {
+    marker.setLatLng([lat, lon]).addTo(map);
+    map.panTo([lat, lon]);
+  }
+}
+$("f-lat").addEventListener("change", onCoordInput);
+$("f-lon").addEventListener("change", onCoordInput);
+
+$("my-location").addEventListener("click", () => {
+  if (!navigator.geolocation) return toast("Dein Browser kann den Standort nicht bestimmen.", true);
+  $("my-location").disabled = true;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      $("my-location").disabled = false;
+      setCoords(pos.coords.latitude, pos.coords.longitude);
+      toast(`Standort übernommen (± ${Math.round(pos.coords.accuracy)} m)`);
+    },
+    () => {
+      $("my-location").disabled = false;
+      toast("Standort nicht verfügbar. Erlaube den Zugriff im Browser.", true);
+    },
+    { enableHighAccuracy: true, timeout: 15000 },
+  );
+});
+
+function renderPhotos() {
+  const list = $("photos");
+  if (!photos.length) {
+    const p = document.createElement("p");
+    p.className = "photos-empty";
+    p.textContent = "Noch keine Fotos.";
+    list.replaceChildren(p);
+    return;
+  }
+  list.replaceChildren(...photos.map((photo, i) => {
+    const li = document.createElement("li");
+    li.className = "photo-item";
+
+    const img = document.createElement("img");
+    img.src = photo.url;
+    img.alt = photo.caption || `Foto ${i + 1}`;
+
+    const fields = document.createElement("div");
+    fields.className = "photo-fields";
+    if (i === 0) {
+      const pill = document.createElement("span");
+      pill.className = "pill";
+      pill.textContent = "Titelfoto";
+      fields.append(pill);
+    }
+    const caption = document.createElement("input");
+    caption.className = "input";
+    caption.type = "text";
+    caption.maxLength = 200;
+    caption.placeholder = "Bildunterschrift (optional)";
+    caption.value = photo.caption;
+    caption.id = `caption-${photo.id}`;
+    caption.setAttribute("aria-label", `Bildunterschrift Foto ${i + 1}`);
+    caption.addEventListener("input", () => { photo.caption = caption.value; });
+    fields.append(caption);
+
+    const tools = document.createElement("div");
+    tools.className = "photo-tools";
+    const button = (label, title, onClick, disabled = false, extra = "") => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = `icon-btn ${extra}`;
+      b.textContent = label;
+      b.title = title;
+      b.setAttribute("aria-label", title);
+      b.disabled = disabled;
+      b.addEventListener("click", onClick);
+      return b;
+    };
+    tools.append(
+      button("↑", "Nach vorne", () => movePhoto(i, -1), i === 0),
+      button("↓", "Nach hinten", () => movePhoto(i, 1), i === photos.length - 1),
+      button("✕", "Foto entfernen", () => removePhotoAt(i), false, "danger"),
+    );
+
+    li.append(img, fields, tools);
+    return li;
+  }));
+}
+
+function movePhoto(i, delta) {
+  const j = i + delta;
+  [photos[i], photos[j]] = [photos[j], photos[i]];
+  renderPhotos();
+}
+
+function removePhotoAt(i) {
+  const [photo] = photos.splice(i, 1);
+  if (photo.path) removedPhotos.push(photo);
+  renderPhotos();
+}
+
+$("f-photo").addEventListener("change", async () => {
+  const files = [...$("f-photo").files];
+  $("f-photo").value = "";
+  for (const file of files) {
+    try {
+      const blob = await shrinkPhoto(file);
+      photos.push({ id: newUuid(), path: null, caption: "", blob, url: URL.createObjectURL(blob) });
+    } catch (err) {
+      toast(err.message || "Ein Foto konnte nicht verarbeitet werden.", true);
+    }
+  }
+  renderPhotos();
+  if (files.length) toast("Fotos bereit – mit „Speichern“ hochladen");
+});
+
+$("f-desc").addEventListener("input", updateDescCount);
+function updateDescCount() {
+  $("desc-count").textContent = `${$("f-desc").value.length} / 6000 Zeichen`;
+}
+
+function openEditor(place) {
+  current = place;
+  photos = sortedPhotos(place).map((p) => ({ ...p, url: photoUrl(p.path) }));
+  removedPhotos = [];
+  showError("editor-error", "");
+  $("delete-confirm").hidden = true;
+  $("delete").hidden = !place;
+
+  $("empty").hidden = true;
+  $("editor").hidden = false;
+  ensureMap();
+  map.invalidateSize();
+
+  $("editor-title").textContent = place ? place.name : "Neuer Ort";
+  $("editor-id").textContent = place ? `ID: ${place.id}` : "";
+  $("f-name").value = place?.name ?? "";
+  $("f-desc").value = place?.description ?? "";
+  $("f-published").checked = place?.published ?? true;
+  document.querySelectorAll("#f-cats input").forEach((cb) => {
+    cb.checked = place?.categories.includes(cb.value) ?? false;
+  });
+  if (place) {
+    setCoords(place.lat, place.lon);
+  } else {
+    $("f-lat").value = "";
+    $("f-lon").value = "";
+    marker.remove();
+    map.setView(AUGSBURG, 13);
+  }
+  renderPhotos();
+  updateDescCount();
+  renderList();
+
+  if (window.matchMedia("(max-width: 899px)").matches) {
+    $("editor-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  if (!place) $("f-name").focus({ preventScroll: true });
+}
+
+// ---------- Speichern ----------
+
+$("editor").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  showError("editor-error", "");
+
+  const name = $("f-name").value.trim();
+  const lat = parseCoord($("f-lat").value);
+  const lon = parseCoord($("f-lon").value);
+  const categories = [...document.querySelectorAll("#f-cats input:checked")].map((cb) => cb.value);
+
+  if (!name) return showError("editor-error", "Bitte gib einen Namen ein.");
+  if (lat === null || lon === null || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    return showError("editor-error", "Bitte wähle den Standort auf der Karte oder gib gültige Koordinaten ein.");
+  }
+  if (!categories.length) return showError("editor-error", "Bitte wähle mindestens eine Kategorie.");
+
+  $("save").disabled = true;
+  try {
+    const id = current?.id ?? uniqueId(name);
+
+    // 1. Ort speichern
+    const row = { name, lat, lon, categories, description: $("f-desc").value.trim(), published: $("f-published").checked };
+    const query = current
+      ? sb.from("places").update(row).eq("id", id)
+      : sb.from("places").insert({ id, ...row });
+    const { error: placeError } = await query.select("id").single();
+    if (placeError) throw new Error("Speichern fehlgeschlagen: " + placeError.message);
+
+    // 2. Entfernte Fotos löschen
+    if (removedPhotos.length) {
+      const { error } = await sb.from("place_photos").delete().in("id", removedPhotos.map((p) => p.id));
+      if (error) throw new Error("Foto löschen fehlgeschlagen: " + error.message);
+      await sb.storage.from("photos").remove(removedPhotos.map((p) => p.path));
+      removedPhotos = [];
+    }
+
+    // 3. Neue Fotos hochladen
+    for (const [i, photo] of photos.entries()) {
+      if (photo.path) continue;
+      $("save").textContent = `Lade Foto ${i + 1} von ${photos.length} …`;
+      const path = `${id}/${photo.id}.jpg`;
+      const { error } = await sb.storage.from("photos").upload(path, photo.blob, {
+        contentType: "image/jpeg", cacheControl: "31536000", upsert: false,
+      });
+      if (error) throw new Error("Foto-Upload fehlgeschlagen: " + error.message);
+      photo.path = path;
+    }
+
+    // 4. Reihenfolge und Bildunterschriften speichern
+    if (photos.length) {
+      const rows = photos.map((p, i) => ({ id: p.id, place_id: id, path: p.path, caption: p.caption.trim(), sort_order: i }));
+      const { error } = await sb.from("place_photos").upsert(rows);
+      if (error) throw new Error("Fotos speichern fehlgeschlagen: " + error.message);
+    }
+
+    // 5. Frischen Stand laden
+    const { data, error } = await sb.from("places").select(PLACE_SELECT).eq("id", id).single();
+    if (error) throw new Error("Neu laden fehlgeschlagen: " + error.message);
+
+    const index = places.findIndex((p) => p.id === data.id);
+    if (index >= 0) places[index] = data; else places.push(data);
+    places.sort((a, b) => a.name.localeCompare(b.name, "de"));
+    toast(`„${data.name}“ gespeichert`);
+    openEditor(data);
+  } catch (err) {
+    showError("editor-error", err.message);
+  } finally {
+    $("save").disabled = false;
+    $("save").textContent = "Speichern";
+  }
+});
+
+// ---------- Löschen (mit Bestätigung auf der Seite) ----------
+
+$("delete").addEventListener("click", () => {
+  $("delete").hidden = true;
+  $("delete-confirm").hidden = false;
+});
+$("delete-no").addEventListener("click", () => {
+  $("delete-confirm").hidden = true;
+  $("delete").hidden = false;
+});
+$("delete-yes").addEventListener("click", async () => {
+  if (!current) return;
+  $("delete-yes").disabled = true;
+  const { error } = await sb.from("places").delete().eq("id", current.id);
+  $("delete-yes").disabled = false;
+  if (error) return showError("editor-error", "Löschen fehlgeschlagen: " + error.message);
+  // Die Foto-Einträge löscht die Datenbank mit; die Bilddateien räumen wir selbst weg.
+  const paths = sortedPhotos(current).map((p) => p.path);
+  if (paths.length) await sb.storage.from("photos").remove(paths);
+  toast(`„${current.name}“ gelöscht`);
+  places = places.filter((p) => p.id !== current.id);
+  current = null;
+  $("editor").hidden = true;
+  $("empty").hidden = false;
+  renderList();
+});
+
+// ---------- Start ----------
+
+buildCategoryChips();
+if (!CONFIGURED) {
+  $("login").hidden = false;
+  showError("login-error", "Supabase-Zugangsdaten fehlen noch (SUPABASE_URL / SUPABASE_KEY oben im Skript).");
+  $("login-submit").disabled = true;
+} else {
+  sb.auth.getSession().then(({ data }) => showForSession(data.session));
+}
+</script>
+</body>
+</html>
