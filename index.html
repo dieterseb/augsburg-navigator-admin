@@ -48,6 +48,9 @@
       --danger: #F08A7C;
       --ok: #B4C3A3;
     }
+    /* OSM-Karten gibt es nur hell: im Dunkelmodus abgedunkelt und farblich gedreht */
+    #map .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.9) saturate(.6); }
+    #map { background: #1E1A17; }
   }
 
   * { box-sizing: border-box; }
@@ -293,6 +296,7 @@
           <div class="section">
             <div class="section-title">Standort – tippe auf die Karte oder ziehe den Marker</div>
             <div id="map"></div>
+            <p id="map-local-hint" class="hint" hidden>Die Karte lädt nur in der Online-Version (dieterseb.github.io). Koordinaten kannst du hier trotzdem eintippen.</p>
             <div class="coords">
               <label class="field">Breitengrad
                 <input id="f-lat" class="input" type="text" inputmode="decimal" placeholder="48.36876">
@@ -611,14 +615,13 @@ function buildCategoryChips() {
 function ensureMap() {
   if (map) return;
   map = L.map("map").setView(AUGSBURG, 13);
-  // CARTO-Kacheln (OpenStreetMap-Daten): erlaubt auch Aufrufe direkt aus einer lokalen Datei,
-  // was die Server von openstreetmap.org nicht tun. Im Dunkelmodus eine dunkle Karte.
-  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark ? "dark_all" : "rastertiles/voyager"}/{z}/{x}/{y}{r}.png`, {
-    maxZoom: 20,
-    subdomains: "abcd",
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  // OpenStreetMap-Kacheln. Die OSM-Server verlangen die Absender-Webseite (Referer):
+  // online (GitHub Pages) klappt das, als lokal geöffnete Datei nicht.
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
+  $("map-local-hint").hidden = location.protocol !== "file:";
   const icon = L.divIcon({ className: "", html: '<div class="pin"></div>', iconSize: [26, 26], iconAnchor: [13, 30] });
   marker = L.marker(AUGSBURG, { draggable: true, icon });
   marker.on("dragend", () => setCoords(marker.getLatLng().lat, marker.getLatLng().lng, false));
