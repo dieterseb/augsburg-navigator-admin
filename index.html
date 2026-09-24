@@ -113,6 +113,10 @@
   .input:focus, textarea:focus { outline: none; border-color: var(--accent); }
   .hint { font-size: 12px; font-weight: 400; color: var(--muted); }
   .error { color: var(--danger); font-size: 14px; margin: 0; }
+  .rename-hint {
+    font-size: 13px; font-weight: 500; color: var(--accent-soft-ink); background: var(--accent-soft);
+    border-radius: 10px; padding: 8px 12px;
+  }
 
   /* Hauptbereich */
   .layout { display: grid; gap: 20px; grid-template-columns: 1fr; }
@@ -291,6 +295,7 @@
 
           <label class="field">Name
             <input id="f-name" class="input" type="text" maxlength="120" required placeholder="z. B. Perlachturm">
+            <span id="rename-hint" class="rename-hint" hidden></span>
           </label>
 
           <div class="section">
@@ -373,7 +378,7 @@ const CATEGORIES = [
   ["nature", "Natur & Freizeit"],
   ["restaurants", "Restaurants"],
   ["bars", "Bars & Biergärten"],
-  ["swimming", "Schwimmbäder & Baden"],
+  ["swimming", "Baden"],
   ["unesco", "UNESCO-Welterbe"],
 ];
 const AUGSBURG = [48.3705, 10.8978];
@@ -750,6 +755,17 @@ $("f-photo").addEventListener("change", async () => {
   if (files.length) toast("Fotos bereit – mit „Speichern“ hochladen");
 });
 
+// Warnt, wenn ein bestehender Ort umbenannt wird – statt versehentlich einen neuen anzulegen.
+function updateRenameHint() {
+  const renaming = current && $("f-name").value.trim() !== current.name;
+  $("rename-hint").hidden = !renaming;
+  if (renaming) {
+    $("rename-hint").textContent =
+      `Du benennst „${current.name}“ um. Für einen zusätzlichen Ort nutze „+ Neuer Ort“.`;
+  }
+}
+$("f-name").addEventListener("input", updateRenameHint);
+
 $("f-desc").addEventListener("input", updateDescCount);
 function updateDescCount() {
   $("desc-count").textContent = `${$("f-desc").value.length} / 6000 Zeichen`;
@@ -786,6 +802,7 @@ function openEditor(place) {
   }
   renderPhotos();
   updateDescCount();
+  updateRenameHint();
   renderList();
 
   if (window.matchMedia("(max-width: 899px)").matches) {
